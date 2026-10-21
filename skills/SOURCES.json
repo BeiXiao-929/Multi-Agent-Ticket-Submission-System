@@ -1,0 +1,53 @@
+{
+  "generated_at": "2026-10-20",
+  "policy": "Only public source files are vendored. Runtime libraries are pinned in backend/requirements.txt and frontend/copilot-widget-src/package.json.",
+  "sources": [
+    {
+      "name": "superpowers",
+      "kind": "vendored-skills",
+      "url": "https://github.com/obra/superpowers",
+      "commit": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+      "license": "MIT",
+      "path": "skills/vendor/superpowers"
+    },
+    {
+      "name": "to-tickets",
+      "kind": "local-compatible-skill",
+      "url": "https://github.com/mattpocock/to-tickets",
+      "status": "upstream-unavailable",
+      "note": "The supplied GitHub URL was not publicly accessible during implementation. This project provides an independently written compatible skill; it is not represented as upstream source.",
+      "path": "skills/local/to-tickets"
+    },
+    {
+      "name": "langgraph",
+      "kind": "runtime-dependency",
+      "url": "https://github.com/langchain-ai/langgraph",
+      "requirement": "langgraph>=1.0,<2",
+      "used_by": "backend/app/assistant/workflow.py"
+    },
+    {
+      "name": "llama-index",
+      "kind": "runtime-dependency",
+      "url": "https://github.com/run-llama/llama_index",
+      "requirement": "llama-index-core>=0.14,<0.15",
+      "used_by": "backend/app/assistant/retrieval.py",
+      "note": "BM25 is provided by bm25s to avoid the PyStemmer C++ build requirement on Windows."
+    },
+    {
+      "name": "copilotkit-python",
+      "kind": "runtime-dependency",
+      "url": "https://github.com/CopilotKit/CopilotKit",
+      "commit": "99f29ee545a2ca96c84d4a151f079197eefff525",
+      "requirement": "copilotkit>=0.1.96,<0.2",
+      "used_by": "backend/app/main.py"
+    },
+    {
+      "name": "copilotkit-react",
+      "kind": "prebuilt-static-widget",
+      "url": "https://github.com/CopilotKit/CopilotKit",
+      "version": "1.79.1",
+      "source": "frontend/copilot-widget-src",
+      "artifact": "frontend/copilot-widget.js"
+    }
+  ]
+}

@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>多智能体工单协同系统</title>
+  <link rel="stylesheet" href="tailwind.css?v=20261021" />
+  <link rel="stylesheet" href="copilot-widget.css?v=20261020" />
+</head>
+
+<body class="bg-ink-50 text-ink-800 min-h-screen antialiased">
+
+<!-- ============ Top Nav ============ -->
+<header class="sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-ink-200">
+  <div class="mx-auto max-w-[1440px] px-6 py-3 flex items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-accent-600 text-white grid place-items-center font-bold text-sm shadow-pop">MA</div>
+      <div>
+        <div class="font-semibold text-[15px] tracking-tight">多智能体工单协同系统</div>
+        <div class="text-[11px] text-ink-500 -mt-0.5">Multi-Agent Ticket Collaboration</div>
+      </div>
+    </div>
+
+    <nav class="hidden md:flex items-center gap-1">
+      <button data-tab="submit"    class="tab-btn tab-active px-3 py-1.5 rounded-md text-[13px] font-medium">提交工单</button>
+      <button data-tab="dashboard" class="tab-btn px-3 py-1.5 rounded-md text-[13px] font-medium">工单看板</button>
+      <button data-tab="detail"    class="tab-btn px-3 py-1.5 rounded-md text-[13px] font-medium">进度查询</button>
+      <button data-tab="agents"    class="tab-btn px-3 py-1.5 rounded-md text-[13px] font-medium">Agent 状态</button>
+      <button data-tab="logs"      class="tab-btn px-3 py-1.5 rounded-md text-[13px] font-medium">实时日志</button>
+    </nav>
+
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 text-[12px] text-ink-600">
+        <span id="conn-dot" class="w-2 h-2 rounded-full bg-amber-500 pulse-dot"></span>
+        <span id="conn-label">连接中…</span>
+      </div>
+      <div class="text-[12px] text-ink-500 font-mono hidden lg:block" id="clock"></div>
+    </div>
+  </div>
+
+  <!-- Mobile tab strip -->
+  <div class="md:hidden border-t border-ink-200 bg-white">
+    <div class="flex gap-1 px-3 py-2 overflow-x-auto">
+      <button data-tab="submit"    class="tab-btn tab-active px-3 py-1.5 rounded-md text-[12px] font-medium whitespace-nowrap">提交工单</button>
+      <button data-tab="dashboard" class="tab-btn px-3 py-1.5 rounded-md text-[12px] font-medium whitespace-nowrap">工单看板</button>
+      <button data-tab="detail"    class="tab-btn px-3 py-1.5 rounded-md text-[12px] font-medium whitespace-nowrap">进度查询</button>
+      <button data-tab="agents"    class="tab-btn px-3 py-1.5 rounded-md text-[12px] font-medium whitespace-nowrap">Agent 状态</button>
+      <button data-tab="logs"      class="tab-btn px-3 py-1.5 rounded-md text-[12px] font-medium whitespace-nowrap">实时日志</button>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-[1440px] px-6 py-6 space-y-6">
+
+  <!-- ================= Panel: Submit ================= -->
+  <section class="panel active space-y-6" id="panel-submit">
+    <div class="grid lg:grid-cols-2 gap-6">
+
+      <!-- Left: submit form -->
+      <div class="bg-white rounded-xl shadow-card border border-ink-200 p-6 fade-in">
+        <div class="flex items-center justify-between">
+          <h2 id="form-title" class="text-[15px] font-semibold">新建工单</h2>
+          <span id="form-context" class="text-[11px] text-ink-400">支持一句话提多个部门需求</span>
+        </div>
+
+        <label class="block mt-5 mb-1.5 text-[12px] text-ink-500 font-medium">工单标题</label>
+        <input id="ticket-title"
+               class="w-full rounded-lg border border-ink-200 px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 transition"
+               placeholder="例如：新员工入职 + 报销 + 服务器采购" />
+
+        <label class="block mt-4 mb-1.5 text-[12px] text-ink-500 font-medium">
+          问题描述（自然语言，可混合多个诉求）
+        </label>
+        <textarea id="ticket-desc"
+                  class="w-full rounded-lg border border-ink-200 px-3 py-2.5 text-[14px] min-h-[140px] resize-y focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 transition"
+                  placeholder="例：我是新员工张三，电脑没发（IT），公积金怎么查（HR），打车 50 块怎么报销（财务）"></textarea>
+        <div class="flex items-center justify-between mt-1.5">
+          <span class="text-[11px] text-ink-400">最多 2000 字</span>
+          <span id="char-count" class="text-[11px] font-mono text-ink-400">0 / 2000</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mt-4">
+          <div>
+            <label class="block mb-1.5 text-[12px] text-ink-500 font-medium">优先级</label>
+            <select id="ticket-priority" class="w-full rounded-lg border border-ink-200 px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white">
+              <option value="low">低</option>
+              <option value="normal" selected>普通</option>
+              <option value="high">高</option>
+            </select>
+          </div>
+          <div>
+            <label class="block mb-1.5 text-[12px] text-ink-500 font-medium">提交人</label>
+            <input id="ticket-submitter" class="w-full rounded-lg border border-ink-200 px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500" placeholder="张三" />
+          </div>
+        </div>
+
+        <div class="flex gap-3 mt-6">
+          <button id="btn-submit"
+                  class="inline-flex items-center gap-2 rounded-lg bg-accent-600 hover:bg-accent-700 active:bg-accent-800 text-white px-5 py-2.5 text-[13px] font-medium shadow-card transition disabled:opacity-60 disabled:cursor-not-allowed">
+            <span class="spinner hidden" id="btn-submit-spinner"></span>
+            <span id="btn-submit-label">提交工单</span>
+          </button>
+          <button id="btn-draft-check"
+                  type="button"
+                  class="rounded-lg border border-accent-200 bg-accent-50 hover:bg-accent-100 px-5 py-2.5 text-[13px] font-medium text-accent-700 transition disabled:opacity-60 disabled:cursor-not-allowed">
+            工单预检查
+          </button>
+          <button id="btn-clear" class="rounded-lg border border-ink-200 hover:bg-ink-50 px-5 py-2.5 text-[13px] font-medium text-ink-600 transition">清空</button>
+        </div>
+      </div>
+
+      <!-- Right top: intelligent routing preview -->
+      <div class="bg-white rounded-xl shadow-card border border-ink-200 p-6 fade-in">
+        <div class="flex items-center justify-between">
+          <h2 class="text-[15px] font-semibold">智能路由预览</h2>
+          <span class="text-[11px] text-ink-400">提交后自动更新</span>
+        </div>
+        <div id="route-preview" class="mt-4 text-[13px] text-ink-400 min-h-[280px] flex items-center justify-center">
+          <div class="text-center space-y-2">
+            <div class="mx-auto w-12 h-12 rounded-full bg-ink-100 grid place-items-center text-2xl">⇢</div>
+            <div>提交工单后，这里会显示拆分结果与各 Agent</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom: flow strip -->
+    <div class="bg-white rounded-xl shadow-card border border-ink-200 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-[13px] font-semibold text-ink-600 uppercase tracking-wider">处理流水线</h3>
+        <span id="flow-ticket-id" class="text-[11px] font-mono text-ink-400"></span>
+      </div>
+      <div id="route-flow" class="flex items-center gap-1.5 flex-wrap text-[12px]">
+        <span class="flow-step idle">提交</span><span class="flow-arrow">→</span>
+        <span class="flow-step idle">LLM 分类</span><span class="flow-arrow">→</span>
+        <span class="flow-step idle">多意图拆分</span><span class="flow-arrow">→</span>
+        <span class="flow-step idle">分发 Agent</span><span class="flow-arrow">→</span>
+        <span class="flow-step idle">SLA 监控</span><span class="flow-arrow">→</span>
+        <span class="flow-step idle">聚合回复</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Panel: Dashboard ================= -->
+  <section class="panel hidden space-y-5" id="panel-dashboard">
+    <!-- stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white rounded-xl shadow-card border border-ink-200 p-4">
+        <div class="text-[11px] uppercase tracking-wider text-ink-400 font-medium">工单总数</div>
+        <div class="text-2xl font-bold mt-1" id="stat-total">0</div>
+      </div>
+      <div class="bg-white rounded-xl shadow-card border border-ink-200 p-4">
+        <div class="text-[11px] uppercase tracking-wider text-ink-400 font-medium">处理中</div>
+        <div class="text-2xl font-bold mt-1 text-blue-600" id="stat-processing">0</div>
+      </div>
+      <div class="bg-white rounded-xl shadow-card border border-ink-200 p-4">
+        <div class="text-[11px] uppercase tracking-wider text-ink-400 font-medium">已解决</div>
+        <div class="text-2xl font-bold mt-1 text-emerald-600" id="stat-resolved">0</div>
+      </div>
+      <div class="bg-white rounded-xl shadow-card border border-ink-200 p-4">
+        <div class="text-[11px] uppercase tracking-wider text-ink-400 font-medium">已升级</div>
+        <div class="text-2xl font-bold mt-1 text-red-600" id="stat-escalated">0</div>
+      </div>
+    </div>
+
+    <!-- tickets table -->
+    <div class="bg-white rounded-xl shadow-card border border-ink-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-ink-100 flex items-center justify-between">
+        <h3 class="text-[15px] font-semibold">工单列表</h3>
+        <button id="btn-refresh" class="text-[12px] text-accent-600 hover:text-accent-700 font-medium">刷新</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-[13px]">
+          <thead class="bg-ink-50 text-ink-500 text-[11px] uppercase tracking-wider">
+            <tr>
+              <th class="text-left px-5 py-3 font-medium">工单号</th>
+              <th class="text-left px-4 py-3 font-medium">标题</th>
+              <th class="text-left px-4 py-3 font-medium">主部门</th>
+              <th class="text-left px-4 py-3 font-medium">子任务</th>
+              <th class="text-left px-4 py-3 font-medium">状态</th>
+              <th class="text-left px-4 py-3 font-medium">优先级</th>
+              <th class="text-left px-5 py-3 font-medium">提交时间</th>
+              <th class="text-right px-5 py-3 font-medium sticky right-0 z-10" style="background:#f9fafb;box-shadow:-8px 0 12px -12px rgba(17,24,39,.22)">操作</th>
+            </tr>
+          </thead>
+          <tbody id="ticket-tbody">
+            <tr><td colspan="8" class="px-5 py-10 text-center text-ink-400">暂无工单，请先提交</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Panel: Detail / Query ================= -->
+  <section class="panel hidden space-y-5" id="panel-detail">
+    <div class="bg-white rounded-xl shadow-card border border-ink-200 p-5">
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <input id="query-id" class="flex-1 rounded-lg border border-ink-200 px-3 py-2.5 text-[14px] font-mono focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+               placeholder="输入工单号查询进度（提交后自动填入）" />
+        <button id="btn-query" class="rounded-lg bg-ink-900 hover:bg-black text-white px-5 py-2.5 text-[13px] font-medium transition">查询</button>
+      </div>
+      <div class="mt-3 text-[11px] text-ink-400">查询后页面无需刷新：WebSocket 会推送各子任务状态变化（含 escalated / waiting_info）。</div>
+    </div>
+    <div id="detail-result"></div>
+  </section>
+
+  <!-- ================= Panel: Agents ================= -->
+  <section class="panel hidden" id="panel-agents">
+    <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4" id="agent-grid"></div>
+  </section>
+
+  <!-- ================= Panel: Logs ================= -->
+  <section class="panel hidden" id="panel-logs">
+    <div class="bg-ink-950 text-ink-100 rounded-xl shadow-card border border-ink-800 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-[13px] font-semibold uppercase tracking-wider text-ink-400">Agent / 编排 实时日志</h3>
+        <button id="btn-clear-logs" class="text-[11px] text-ink-400 hover:text-white transition">清空</button>
+      </div>
+      <div id="log-box" class="h-[340px] overflow-y-auto text-[12px] leading-relaxed log-line"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ================= Toast ================= -->
+<div id="toast" class="fixed top-24 sm:top-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] opacity-0 translate-y-[-8px] transition-all duration-300 pointer-events-none bg-ink-900 text-white rounded-lg px-4 py-2.5 text-[13px] shadow-pop"></div>
+<div id="copilot-widget-root"></div>
+
+<script src="api.js?v=20261020-crud"></script>
+<script>
+/* ------------------------------------------------------------------
+   helpers
+------------------------------------------------------------------ */
+function $(id){ return document.getElementById(id); }
+
+function toast(msg, type = "success") {
+  const el = $("toast");
+  el.textContent = msg;
+  el.className = "fixed top-24 sm:top-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] opacity-100 translate-y-0 transition-all duration-300 pointer-events-none rounded-lg px-4 py-2.5 text-[13px] shadow-pop " +
+    (type === "success" ? "bg-emerald-600 text-white" :
+     type === "error"   ? "bg-red-600 text-white"
+                        : "bg-ink-900 text-white");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = "fixed top-24 sm:top-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] opacity-0 translate-y-[-8px] transition-all duration-300 pointer-events-none bg-ink-900 text-white rounded-lg px-4 py-2.5 text-[13px] shadow-pop"; }, 2400);
+}
+
+function log(msg, cls = "") {
+  const box = $("log-box");
+  const line = document.createElement("div");
+  const t = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  line.className = "log-line";
+  line.innerHTML = `<span class="text-accent-300">[${t}]</span> <span class="${cls}">${msg}</span>`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  if (box.children.length > 500) box.removeChild(box.firstChild);
+}
+
+function statusBadge(status) {
+  const map = {
+    created: "st-created", routed: "st-created",
+    processing: "st-processing",
+    waiting_info: "st-waiting_info",
+    escalated: "st-escalated",
+    resolved: "st-resolved", closed: "st-closed",
+    failed: "st-escalated",
+  };
+  const cn = {
+    created:"已创建", routed:"已路由", processing:"处理中",
+    waiting_info:"等待补充", escalated:"已升级", resolved:"已解决",
+    closed:"已关闭", failed:"失败",
+  };
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${map[status] || "st-created"}">${cn[status] || status}</span>`;
+}
+
+function deptTag(dept) {
+  const map = {
+    IT: "bg-blue-50 text-blue-700 border-blue-200",
+    HR: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    PROCUREMENT: "bg-amber-50 text-amber-700 border-amber-200",
+    FINANCE: "bg-rose-50 text-rose-700 border-rose-200",
+    OTHER: "bg-ink-100 text-ink-600 border-ink-200",
+  };
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${map[dept] || map.OTHER}">${dept}</span>`;
+}
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+/* ------------------------------------------------------------------
+   tabs
+------------------------------------------------------------------ */
+function activateTab(tab) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("tab-active", b.dataset.tab === tab));
+  document.querySelectorAll(".panel").forEach(p => p.classList.add("hidden"));
+  $("panel-" + tab).classList.remove("hidden");
+  if (tab === "dashboard") refreshDashboard();
+  if (tab === "agents") refreshAgents();
+}
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+});
+
+/* ------------------------------------------------------------------
+   clock
+------------------------------------------------------------------ */
+function tick(){ $("clock").textContent = new Date().toLocaleString("zh-CN", { hour12: false }); }
+tick(); setInterval(tick, 1000);
+
+/* ------------------------------------------------------------------
+   submit form: char counter + submit
+------------------------------------------------------------------ */
+const DESC_MAX = 2000;
+const descEl = $("ticket-desc");
+let editingTicketId = null;
+
+function syncDescCounter() {
+  const len = descEl.value.length;
+  const cc = $("char-count");
+  cc.textContent = `${len} / ${DESC_MAX}`;
+  cc.classList.toggle("text-red-600", len > DESC_MAX);
+  cc.classList.toggle("text-amber-600", len > DESC_MAX * 0.9 && len <= DESC_MAX);
+  cc.classList.toggle("text-ink-400", len <= DESC_MAX * 0.9);
+  descEl.classList.toggle("border-red-400", len > DESC_MAX);
+}
+
+function resetTicketForm() {
+  editingTicketId = null;
+  $("ticket-title").value = "";
+  descEl.value = "";
+  $("ticket-priority").value = "normal";
+  $("ticket-submitter").value = "";
+  $("form-title").textContent = "新建工单";
+  $("form-context").textContent = "支持一句话提多个部门需求";
+  $("btn-submit-label").textContent = "提交工单";
+  $("btn-clear").textContent = "清空";
+  syncDescCounter();
+  notifyTicketFormChanged();
+}
+
+function notifyTicketFormChanged() {
+  window.dispatchEvent(new CustomEvent("ticket-form:updated"));
+}
+
+function setTicketFormValues(values, options = {}) {
+  if (!values) return;
+  if (typeof values.title === "string" && values.title.trim()) $("ticket-title").value = values.title.trim();
+  if (typeof values.description === "string" && values.description.trim()) descEl.value = values.description.trim();
+  if (["low", "normal", "high"].includes(values.priority)) $("ticket-priority").value = values.priority;
+  if (typeof values.submitter === "string" && values.submitter.trim()) $("ticket-submitter").value = values.submitter.trim();
+  syncDescCounter();
+  notifyTicketFormChanged();
+  activateTab("submit");
+  if (options.focus !== false) $("ticket-title").focus();
+}
+
+window.getTicketFormSnapshot = function getTicketFormSnapshot() {
+  return {
+    title: $("ticket-title").value,
+    description: descEl.value,
+    priority: $("ticket-priority").value,
+    submitter: $("ticket-submitter").value,
+    editing_ticket_id: editingTicketId,
+  };
+};
+
+window.addEventListener("ticket-assistant:fill", (event) => {
+  setTicketFormValues(event.detail || {});
+  toast("工单草稿已填入，请复核后手动提交");
+});
+
+function renderAssistantPreview(result) {
+  const draft = result.draft || {};
+  const missing = result.missing_fields || [];
+  const knowledge = result.knowledge || [];
+  const similar = result.similar_tickets || [];
+  $("route-preview").innerHTML = `
+    <div class="fade-in space-y-4">
+      <div class="flex items-center justify-between">
+        <div><div class="text-[13px] font-semibold text-ink-800">工单草稿预检查</div><div class="text-[11px] text-ink-400">尚未提交，需人工复核</div></div>
+        <div class="flex items-center gap-2">${deptTag(draft.department)}<span class="text-[11px] text-ink-500">${esc(draft.priority || "normal")}</span></div>
+      </div>
+      <div class="rounded-lg border border-ink-200 bg-ink-50 p-3 text-[12px] text-ink-700 leading-relaxed whitespace-pre-wrap">${esc(result.assistant_message || "")}</div>
+      ${missing.length ? `<div><div class="text-[12px] font-semibold text-amber-700 mb-2">提交前建议补充</div><div class="space-y-1.5">${missing.map(item => `<div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">${esc(item.label)}：${esc(item.question)}</div>`).join("")}</div></div>` : `<div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700">必填信息检查通过</div>`}
+      ${knowledge.length ? `<div><div class="text-[12px] font-semibold text-ink-500 mb-2">参考 SOP</div><div class="space-y-1">${knowledge.slice(0,3).map(item => `<div class="text-[12px] text-ink-600"><span class="font-medium">${esc(item.title)}</span><span class="text-ink-400"> · ${(Number(item.score || 0)).toFixed(2)}</span></div>`).join("")}</div></div>` : ""}
+      <div class="text-[11px] text-ink-400">${similar.length ? `同时检索到 ${similar.length} 条相似历史工单` : "暂未检索到相似历史工单"}</div>
+    </div>`;
+}
+
+async function analyzeCurrentTicket() {
+  const title = $("ticket-title").value.trim();
+  const description = descEl.value.trim() || title;
+  if (!description) return toast("请先填写标题或问题描述", "error");
+  const button = $("btn-draft-check");
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "预检查中…";
+  try {
+    const result = await api.analyzeTicket({
+      title,
+      description,
+      submitter: $("ticket-submitter").value.trim(),
+      priority: $("ticket-priority").value,
+    });
+    setTicketFormValues(result.draft || {}, { focus: false });
+    renderAssistantPreview(result);
+    log(`工单预检查完成：${result.draft.department}/${result.draft.type}`, "text-emerald-400");
+    toast((result.missing_fields || []).length ? "工单草稿已填入，请补充建议信息后提交" : "工单预检查通过，请复核后提交");
+  } catch (e) {
+    log(`工单预检查失败：${esc(e.message || e)}`, "text-red-400");
+    toast("工单预检查失败：" + (e.message || e), "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
+async function startEditTicket(id) {
+  try {
+    const ticket = await api.getTicket(id);
+    editingTicketId = ticket.id;
+    $("ticket-title").value = ticket.title;
+    descEl.value = ticket.description;
+    $("ticket-priority").value = ticket.priority;
+    $("ticket-submitter").value = ticket.submitter;
+    $("form-title").textContent = "编辑工单";
+    $("form-context").textContent = `正在编辑 ${ticket.id.slice(0, 8)}…`;
+    $("btn-submit-label").textContent = "保存修改";
+    $("btn-clear").textContent = "取消编辑";
+    syncDescCounter();
+    activateTab("submit");
+    $("ticket-title").focus();
+    toast("工单已载入，可修改后保存");
+  } catch (e) {
+    toast("无法加载工单：" + (e.message || e), "error");
+  }
+}
+
+descEl.addEventListener("input", () => {
+  syncDescCounter();
+  notifyTicketFormChanged();
+});
+
+["ticket-title", "ticket-priority", "ticket-submitter"].forEach((id) => {
+  $(id).addEventListener("input", notifyTicketFormChanged);
+  $(id).addEventListener("change", notifyTicketFormChanged);
+});
+
+$("btn-clear").addEventListener("click", resetTicketForm);
+$("btn-draft-check").addEventListener("click", analyzeCurrentTicket);
+
+$("btn-submit").addEventListener("click", async () => {
+  const title = $("ticket-title").value.trim();
+  const content = descEl.value.trim();
+  const priority = $("ticket-priority").value;
+  const submitter = $("ticket-submitter").value.trim() || "anonymous";
+  if (!title) return toast("请填写标题", "error");
+  if (!content) return toast("请填写描述", "error");
+  if (content.length > DESC_MAX) return toast(`描述超过 ${DESC_MAX} 字上限`, "error");
+
+  const btn = $("btn-submit");
+  const label = $("btn-submit-label");
+  const spinner = $("btn-submit-spinner");
+  const isEditing = editingTicketId !== null;
+  btn.disabled = true;
+  label.textContent = isEditing ? "保存中…" : "提交中…";
+  spinner.classList.remove("hidden");
+  try {
+    if (isEditing) {
+      const updated = await api.updateTicket(editingTicketId, {
+        title, description: content, priority, submitter,
+      });
+      log(`已更新工单 ${updated.id.slice(0, 8)}…`, "text-emerald-400");
+      toast("工单修改已保存");
+      resetTicketForm();
+      activateTab("dashboard");
+      return;
+    }
+
+    log(`提交工单「${esc(title)}」`, "text-white");
+    const res = await api.submitTicket({ title, content, priority, submitter });
+    log(`分类结果：${res.primary_dept}（置信度 ${(res.confidence*100).toFixed(0)}%、多意图=${res.multi_intent}、来源=${res.source || "?"}）`, "text-emerald-400");
+    log(`子工单：${(res.sub_ticket_ids || []).join(", ")}`, "text-emerald-400");
+    if (res.hint) log(`提示：${res.hint}`, "text-amber-300");
+
+    // routing preview
+    renderRoutePreview(res);
+    $("flow-ticket-id").textContent = "工单号 " + res.ticket_id;
+    advanceFlowSteps(res);
+
+    // open detail panel + start live stream
+    $("query-id").value = res.ticket_id;
+    startLiveStream(res.ticket_id);
+    toast("已提交，工单号 " + res.ticket_id);
+  } catch (e) {
+    const action = isEditing ? "保存" : "提交";
+    log(`${action}失败：${esc(e.message || e)}`, "text-red-400");
+    toast(`${action}失败：` + (e.message || e), "error");
+  } finally {
+    btn.disabled = false;
+    label.textContent = editingTicketId ? "保存修改" : "提交工单";
+    spinner.classList.add("hidden");
+  }
+});
+
+function renderRoutePreview(res) {
+  const box = $("route-preview");
+  const intents = res.sub_intents || [];
+  const hasSub = intents.length > 0;
+  box.innerHTML = `
+    <div class="fade-in space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="text-[13px] text-ink-500">分类结果</div>
+        <div class="flex items-center gap-2">
+          ${deptTag(res.primary_dept)}
+          <span class="text-[11px] text-ink-400 font-mono">置信度 ${(res.confidence*100).toFixed(0)}%</span>
+        </div>
+      </div>
+
+      ${hasSub ? `
+      <div>
+        <div class="text-[12px] font-semibold text-ink-500 mb-2">
+          ${res.multi_intent ? `多意图拆分（${intents.length} 个子任务）` : "单一意图"}
+        </div>
+        <div class="grid gap-2">
+          ${intents.map(it => `
+            <div class="flex items-center justify-between px-3 py-2 rounded-lg border border-ink-200 bg-ink-50">
+              <div class="flex items-center gap-2.5">
+                ${deptTag(it.dept)}
+                <span class="text-[13px] text-ink-700">${esc(it.span || it.dept)}</span>
+              </div>
+              <span class="text-[11px] text-ink-400 font-mono">
+                ${(it.confidence*100).toFixed(0)}%${it.source ? " · " + it.source : ""}
+              </span>
+            </div>
+          `).join("")}
+        </div>
+      </div>` : ""}
+
+      ${res.hint ? `
+        <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[12px] text-amber-800">
+          <div class="font-semibold mb-1">系统提示</div>${esc(res.hint)}
+        </div>` : ""}
+    </div>
+  `;
+}
+
+function advanceFlowSteps(res) {
+  const steps = [...document.querySelectorAll("#route-flow .flow-step")];
+  steps.forEach(s => s.classList.remove("done","active"));
+  steps[0].classList.add("done");
+  steps[1].classList.add("done");
+  steps[2].classList.add(res.multi_intent ? "active" : "done");
+  steps[3].classList.add("active");
+}
+
+/* ------------------------------------------------------------------
+   live stream over WebSocket
+------------------------------------------------------------------ */
+let liveClose = null;
+function startLiveStream(ticketId) {
+  if (liveClose) liveClose();
+  liveClose = streamTicket(
+    ticketId,
+    /* onState */ (msg) => {
+      // If detail panel is showing this ticket, refresh in place
+      if ($("query-id").value === ticketId) renderDetail(msg.ticket, msg.subs, msg);
+      refreshDashboard();
+    },
+    /* onEvent */ (ev) => {
+      if (ev.type === "escalated") log(`SLA 超时：${ev.dept}/${ev.sub_id} 已升级至人工`, "text-red-400");
+      else if (ev.from && ev.to) log(`状态变化：${ev.dept}/${ev.sub_id} ${ev.from} → ${ev.to}`, "text-amber-300");
+    },
+  );
+}
+
+/* ------------------------------------------------------------------
+   detail panel
+------------------------------------------------------------------ */
+$("btn-query").addEventListener("click", async () => {
+  const id = $("query-id").value.trim();
+  if (!id) return toast("请输入工单号", "error");
+  const box = $("detail-result");
+  box.innerHTML = `<div class="bg-white rounded-xl shadow-card border border-ink-200 p-6 text-center text-ink-400 text-[13px]">加载中…</div>`;
+  try {
+    const [ticket, result] = await Promise.all([api.getTicket(id), api.getTicketResult(id)]);
+    renderDetail(ticket, null, result);
+    startLiveStream(id);
+  } catch (e) {
+    box.innerHTML = `<div class="bg-white rounded-xl shadow-card border border-red-200 p-6 text-[13px] text-red-700">查询失败：${esc(e.message || e)}</div>`;
+  }
+});
+
+function renderDetail(ticket, subs, extra) {
+  const box = $("detail-result");
+  if (!ticket) return;
+  const subList = subs || (extra && extra.sub_results ? extra.sub_results : []);
+  const summary = extra && extra.summary ? extra.summary : "";
+  const hint = (ticket.meta && ticket.meta.hint) || (extra && extra.hint);
+
+  box.innerHTML = `
+    <div class="grid lg:grid-cols-2 gap-4">
+      <div class="bg-white rounded-xl shadow-card border border-ink-200 p-5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-[14px] font-semibold">${esc(ticket.title)}</h3>
+          ${statusBadge(ticket.status)}
+        </div>
+        <div class="mt-3 text-[13px] text-ink-600 leading-relaxed whitespace-pre-wrap">${esc(ticket.description)}</div>
+        <div class="mt-4 grid grid-cols-2 gap-3 text-[12px] text-ink-500">
+          <div>工单号 <span class="font-mono text-ink-800">${ticket.id.slice(0,12)}…</span></div>
+          <div>提交人 <span class="text-ink-800">${esc(ticket.submitter)}</span></div>
+          <div>主部门 ${deptTag(ticket.primary_dept) || "-"}</div>
+          <div>优先级 <span class="text-ink-800">${ticket.priority}</span></div>
+          <div>创建时间 <span class="font-mono text-ink-800">${new Date(ticket.created_at).toLocaleString("zh-CN")}</span></div>
+          <div>子任务数 <span class="text-ink-800">${subList.length}</span></div>
+        </div>
+        ${hint ? `<div class="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-[12px] text-amber-800">${esc(hint)}</div>` : ""}
+      </div>
+
+      <div class="bg-white rounded-xl shadow-card border border-ink-200 p-5">
+        <h3 class="text-[14px] font-semibold">子任务 / Agent 协同</h3>
+        <div class="mt-3 space-y-2">
+          ${subList.length ? subList.map(s => subCard(s)).join("") :
+            `<div class="text-[12px] text-ink-400">暂无子任务</div>`}
+        </div>
+      </div>
+    </div>
+    ${summary ? `<div class="mt-4 bg-white rounded-xl shadow-card border border-ink-200 p-5">
+      <h3 class="text-[14px] font-semibold mb-2">聚合回复</h3>
+      <pre class="text-[13px] whitespace-pre-wrap font-mono text-ink-700 leading-relaxed">${esc(summary)}</pre>
+    </div>` : ""}
+  `;
+
+  // wire up append-info buttons
+  box.querySelectorAll("[data-append]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const parentId = btn.dataset.append;
+      const subId = btn.dataset.sub;
+      const input = box.querySelector(`#append-input-${subId}`);
+      const text = (input && input.value || "").trim();
+      if (!text) return toast("请填写补充信息", "error");
+      input.value = "";
+      btn.disabled = true;
+      try {
+        await api.appendInfo(parentId, subId, text);
+        log(`已追加 ${subId}：${esc(text.slice(0,40))}`, "text-emerald-400");
+        toast("补充信息已提交，子任务将重新进入 processing");
+      } catch (e) {
+        log(`追加失败：${esc(e.message || e)}`, "text-red-400");
+        toast("追加失败：" + (e.message || e), "error");
+      } finally { btn.disabled = false; }
+    });
+  });
+}
+
+function subCard(s) {
+  const isWaiting = s.status === "waiting_info";
+  const result = s.result || {};
+  const clarification = result.clarification || result.message || "";
+  return `
+    <div class="rounded-lg border border-ink-200 p-3 ${isWaiting ? "bg-amber-50/40" : "bg-ink-50"}">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          ${deptTag(s.dept)}
+          <span class="text-[13px] text-ink-700">${esc(s.intent_label || s.dept)}</span>
+        </div>
+        ${statusBadge(s.status)}
+      </div>
+      ${clarification ? `<div class="mt-2 text-[12px] text-ink-600">${esc(clarification)}</div>` : ""}
+      ${isWaiting ? `
+      <div class="mt-3 flex gap-2">
+        <input id="append-input-${esc(s.id)}" placeholder="补充信息（如设备编号 / 预算金额）"
+               class="flex-1 rounded-lg border border-ink-200 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white" />
+        <button data-append="${esc(s.parent_id)}" data-sub="${esc(s.id)}"
+                class="rounded-lg bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 text-[12px] font-medium transition">
+          补充
+        </button>
+      </div>` : ""}
+    </div>
+  `;
+}
+
+/* ------------------------------------------------------------------
+   dashboard
+------------------------------------------------------------------ */
+$("btn-refresh").addEventListener("click", refreshDashboard);
+let dashboardTickets = [];
+
+async function refreshDashboard() {
+  try {
+    const tickets = await api.listTickets();
+    dashboardTickets = tickets;
+    $("stat-total").textContent = tickets.length;
+    $("stat-processing").textContent = tickets.filter(t => ["created","routed","processing","waiting_info"].includes(t.status)).length;
+    $("stat-resolved").textContent  = tickets.filter(t => t.status === "resolved" || t.status === "closed").length;
+    $("stat-escalated").textContent = tickets.filter(t => t.status === "escalated").length;
+
+    const tbody = $("ticket-tbody");
+    if (!tickets.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="px-5 py-10 text-center text-ink-400">暂无工单</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = tickets.map(t => {
+      const subs = (t.meta && t.meta.sub_count) || 0;
+      return `
+        <tr data-ticket-id="${esc(t.id)}" class="border-t border-ink-100 hover:bg-ink-50 cursor-pointer transition">
+          <td class="px-5 py-3 font-mono text-[11px] text-ink-500">${t.id.slice(0,8)}…</td>
+          <td class="px-4 py-3 max-w-[280px] truncate">${esc(t.title)}</td>
+          <td class="px-4 py-3">${deptTag(t.primary_dept)}</td>
+          <td class="px-4 py-3 text-ink-500">${t.multi_intent ? (subs ? subs + " 个子任务" : "多意图") : "单任务"}</td>
+          <td class="px-4 py-3">${statusBadge(t.status)}</td>
+          <td class="px-4 py-3 text-ink-500">${t.priority}</td>
+          <td class="px-5 py-3 text-ink-400 text-[11px]">${new Date(t.created_at).toLocaleString("zh-CN")}</td>
+          <td class="px-5 py-3 sticky right-0 z-10" style="background:#fff;box-shadow:-8px 0 12px -12px rgba(17,24,39,.22)">
+            <div class="flex justify-end gap-2 whitespace-nowrap">
+              <button type="button" data-action="edit" data-ticket-id="${esc(t.id)}"
+                      class="rounded-md border border-ink-200 bg-white px-2.5 py-1 text-[12px] font-medium text-ink-600 hover:border-accent-300 hover:bg-accent-50 hover:text-accent-700 transition">编辑</button>
+              <button type="button" data-action="delete" data-ticket-id="${esc(t.id)}"
+                      class="rounded-md border border-red-200 bg-white px-2.5 py-1 text-[12px] font-medium text-red-600 hover:border-red-300 hover:bg-red-50 transition">删除</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join("");
+  } catch (e) { log(`看板刷新失败：${esc(e.message || e)}`, "text-red-400"); }
+}
+
+function jumpToDetail(id) {
+  activateTab("detail");
+  $("query-id").value = id;
+  $("btn-query").click();
+}
+
+$("ticket-tbody").addEventListener("click", (event) => {
+  const actionButton = event.target.closest("button[data-action]");
+  if (actionButton) {
+    event.stopPropagation();
+    const id = actionButton.dataset.ticketId;
+    if (actionButton.dataset.action === "edit") startEditTicket(id);
+    if (actionButton.dataset.action === "delete") deleteTicketById(id, actionButton);
+    return;
+  }
+  const row = event.target.closest("tr[data-ticket-id]");
+  if (row) jumpToDetail(row.dataset.ticketId);
+});
+
+async function deleteTicketById(id, button) {
+  const ticket = dashboardTickets.find(t => t.id === id);
+  const label = ticket ? ticket.title : id.slice(0, 8) + "…";
+  if (!window.confirm(`确定删除工单“${label}”吗？\n该工单的子任务和状态记录也会一并删除。`)) return;
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "删除中…";
+  try {
+    await api.deleteTicket(id);
+    if (editingTicketId === id) resetTicketForm();
+    if ($("query-id").value === id) {
+      if (liveClose) { liveClose(); liveClose = null; }
+      $("query-id").value = "";
+      $("detail-result").innerHTML = "";
+    }
+    log(`已删除工单 ${id.slice(0, 8)}…`, "text-amber-300");
+    toast("工单已删除");
+    await refreshDashboard();
+  } catch (e) {
+    log(`删除失败：${esc(e.message || e)}`, "text-red-400");
+    toast("删除失败：" + (e.message || e), "error");
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+/* ------------------------------------------------------------------
+   agents
+------------------------------------------------------------------ */
+async function refreshAgents() {
+  const grid = $("agent-grid");
+  try {
+    const agents = await api.listAgents();
+    grid.innerHTML = agents.map(a => `
+      <div class="bg-white rounded-xl shadow-card border border-ink-200 p-4">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold text-[14px]">${esc(a.name)}</div>
+          <span class="text-[11px] px-2 py-0.5 rounded-full ${a.online ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"} border ${a.online ? "border-emerald-200" : "border-red-200"}">
+            ${a.online ? "在线" : "离线"}
+          </span>
+        </div>
+        <div class="mt-2 text-[12px] text-ink-500">已处理 <span class="text-ink-800 font-medium">${a.handled}</span> 单 · 在线时长 ${a.uptime_s}s</div>
+      </div>`).join("");
+  } catch (e) {
+    grid.innerHTML = `<div class="col-span-full bg-white rounded-xl border border-red-200 p-4 text-[13px] text-red-700">无法获取 Agent 状态：${esc(e.message || e)}</div>`;
+  }
+}
+
+$("btn-clear-logs").addEventListener("click", () => { $("log-box").innerHTML = ""; });
+
+/* ------------------------------------------------------------------
+   connection check + initial load
+------------------------------------------------------------------ */
+const requestedTab = new URLSearchParams(location.search).get("tab");
+if (requestedTab && $("panel-" + requestedTab)) activateTab(requestedTab);
+
+(async function checkConn() {
+  const dot = $("conn-dot"), label = $("conn-label");
+  try {
+    await api.ping();
+    label.textContent = "后端在线";
+    dot.className = "w-2 h-2 rounded-full bg-emerald-500";
+    setTimeout(refreshDashboard, 400);
+    setTimeout(refreshAgents, 700);
+  } catch (e) {
+    label.textContent = "后端离线";
+    dot.className = "w-2 h-2 rounded-full bg-red-500";
+    log(`后端不可用：${esc(e.message || e)}。请双击 一键启动.bat 并等待窗口自动关闭。`, "text-amber-300");
+  }
+})();
+</script>
+<script src="copilot-widget.js?v=20261020" defer></script>
+</body>
+</html>
